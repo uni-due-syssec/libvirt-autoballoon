@@ -41,6 +41,8 @@ class LibVirtAutoBalloon:
         for i in self.config["vms"]:
             if i["balloon"] is True:
                 self.allowed_vms += [i["name"]]
+        if "blacklist" in self.config:
+            self.allowed_vms += list(set(x.name() for x in self.conn.listAllDomains()) - set(self.config['blacklist']))
 
     def dom_status(self, dom):
         memstat = dom.memoryStats()
@@ -51,7 +53,7 @@ class LibVirtAutoBalloon:
         used = dom_ram_used(dom)
         keep_usable = self.dom_keep_usable(dom)
         ratio_current = self.dom_usable_ratio(dom)
-        print(Name,
+        print(Name.ljust(32, " "),
               int(total_ram / SZ_1MiB),
               int(actual / SZ_1MiB),
               int(used / SZ_1MiB),
@@ -64,7 +66,7 @@ class LibVirtAutoBalloon:
         domainIDs = self.conn.listDomainsID()
         if domainIDs is None:
             raise ExitFailure('No active domains')
-        print("Name", "Total", "Actual", "Used", "Usable", "Thrshld", "Units", "Ratio", sep='\t', flush=True)
+        print("Name".ljust(32, " "), "Total", "Actual", "Used", "Usable", "Thrshld", "Units", "Ratio", sep='\t', flush=True)
         for domainID in domainIDs:
             dom = self.conn.lookupByID(domainID)
             self.dom_status(dom)
@@ -86,7 +88,9 @@ class LibVirtAutoBalloon:
         if ratio_current < 1.0 and actual < total_ram:
             dom_balloon(dom, actual + diff)
         elif ratio_current > 1.5 and actual > keep_usable:
-            dom_balloon(dom, actual - diff)
+            # only shrink if > 256MB
+            if (actual - diff) > 262144:
+                dom_balloon(dom, actual - diff)
 
     def dom_print_names(self):
         domainNames = []
